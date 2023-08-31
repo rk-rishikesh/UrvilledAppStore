@@ -9,6 +9,7 @@ import CategoryDeFi from "../components/CategoryDeFi";
 import AppSection from "../components/appPage/AppSection";
 import Profile from "../components/Profile";
 
+
 export const NavRoutes = () => {
     return (
         <Routes>

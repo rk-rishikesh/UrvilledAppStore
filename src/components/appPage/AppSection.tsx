@@ -1,6 +1,11 @@
 import { Text } from "./Text";
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from 'react';
+import QRCode from "react-qr-code";
+import { io } from "socket.io-client";
+
+const linkDownloadPolygonIDWalletApp =
+    "https://0xpolygonid.github.io/tutorials/wallet/wallet-overview/#quick-start";
 
 function AppSection({ }) {
 
@@ -18,8 +23,136 @@ function AppSection({ }) {
     const [age, setAge] = useState(0);
     const [visits, setVisit] = useState(0);
     const [chains, setChains] = useState([""])
+    const [check, setChecked] = useState(false);
+    const [provedAccessBirthday, setProvedAccessBirthday] = useState(false);
+
+    const publicServerURL =
+        "http://localhost:8080"
+    const localServerURL =
+        "http://localhost:8080"
+
+    const credentialType = "KYCAgeCredential"
+    const issuerOrHowToLink =
+        "https://oceans404.notion.site/How-to-get-a-Verifiable-Credential-f3d34e7c98ec4147b6b2fae79066c4f6?pvs=4"
 
 
+    // Polygon ID - Integration
+
+    const [sessionId, setSessionId] = useState<any>("");
+    const [qrCodeData, setQrCodeData] = useState<any>();
+    const [qr, setShowQR] = useState<boolean>(false);
+    const [isHandlingVerification, setIsHandlingVerification] = useState<any>(false);
+    const [verificationCheckComplete, setVerificationCheckComplete] =
+        useState<any>(false);
+    const [verificationMessage, setVerfificationMessage] = useState<any>("");
+    const [socketEvents, setSocketEvents] = useState<any>([]);
+
+    // serverUrl is localServerURL if not running in prod
+    // Note: the verification callback will always come from the publicServerURL
+    const serverUrl = window.location.href.startsWith("https")
+        ? publicServerURL
+        : localServerURL;
+
+    const getQrCodeApi = (sessionId: any) =>
+        serverUrl + `/api/get-auth-qr?sessionId=${sessionId}`;
+
+    const socket = io(serverUrl);
+
+    useEffect(() => {
+        socket.on("connect", () => {
+            console.log(socket.id)
+            setSessionId(socket.id);
+
+            // only watch this session's events
+            socket.on(socket.id, (arg) => {
+                setSocketEvents((socketEvents: any) => [...socketEvents, arg]);
+            });
+        });
+    }, []);
+
+    useEffect(() => {
+        const fetchQrCode = async () => {
+            const response = await fetch(getQrCodeApi(sessionId));
+            const data = await response.text();
+            return JSON.parse(data);
+        };
+
+        if (sessionId) {
+            fetchQrCode().then(setQrCodeData).catch(console.error);
+
+        }
+    }, [sessionId]);
+
+    // socket event side effects
+    // const verifyAge = () => {
+    //     console.log(socketEvents)
+    //     if (socketEvents.length) {
+
+    //         const currentSocketEvent = socketEvents[socketEvents.length - 1];
+
+    //         if (currentSocketEvent.fn === "handleVerification") {
+    //             if (currentSocketEvent.status === "IN_PROGRESS") {
+    //                 console.log("In Progress")
+    //                 setIsHandlingVerification(true);
+    //             } else {
+    //                 setIsHandlingVerification(false);
+    //                 setVerificationCheckComplete(true);
+    //                 if (currentSocketEvent.status === "DONE") {
+    //                     console.log("Done")
+    //                     setVerfificationMessage("✅ Verified proof");
+    //                     setTimeout(() => {
+    //                         reportVerificationResult(true);
+    //                     }, 2000);
+
+    //                     socket.close();
+    //                 } else {
+    //                     setVerfificationMessage("❌ Error verifying VC");
+    //                 }
+    //             }
+    //         }
+    //     }
+    // };
+
+    // socket event side effects
+    useEffect(() => {
+        if (socketEvents.length) {
+            const currentSocketEvent = socketEvents[socketEvents.length - 1];
+
+            if (currentSocketEvent.fn === "handleVerification") {
+                if (currentSocketEvent.status === "IN_PROGRESS") {
+                    setIsHandlingVerification(true);
+                } else {
+                    setIsHandlingVerification(false);
+                    setVerificationCheckComplete(true);
+                    if (currentSocketEvent.status === "DONE") {
+                        setVerfificationMessage("https://static.vecteezy.com/system/resources/previews/010/915/900/original/3d-fingerprint-digital-security-authentication-concept-icon-or-3d-people-authorization-identity-icon-free-png.png");
+                        setTimeout(() => {
+                            reportVerificationResult(true);
+                        }, 2000);
+
+                        socket.close();
+                    } else {
+                        setVerfificationMessage("❌ Error verifying VC");
+                    }
+                }
+            }
+        }
+    }, [socketEvents]);
+
+
+    // callback, send verification result back to app
+    const reportVerificationResult = (result: any) => {
+        setProvedAccessBirthday(result);
+        setShowQR(false)
+    };
+
+    function openInNewTab(url: any) {
+        var win = window.open(url, "_blank");
+        if (win != null) {
+            win.focus();
+        }
+
+    }
 
     useEffect(() => {
         const fetchData = async () => {
@@ -39,7 +172,7 @@ function AppSection({ }) {
             setChains(data.data[0].chains);
             setVisit(data.data[0].metrics.visits);
             setAge(data.data[0].minAge);
-            
+
             let chainArray = []
             for (var i = 0; i < data.data[0].chains.length; i++) {
                 if (data.data[0].chains[i] == 1) {
@@ -125,9 +258,27 @@ function AppSection({ }) {
 
                     <div className="flex gap-2">
                         <div className="w-1/2">
-                            <a href={appURL} target="_blank">
-                                <button type='button' className='w-full button-theme bg-slate-900 shadow-slate-900 text-slate-100 py-1.5'>Vist dApp</button>
-                            </a>
+                            {/* <a href={appURL} target="_blank"> */}
+
+
+                            {
+                                provedAccessBirthday ?
+                                    <>
+                                        <a href={appURL} target="_blank">
+                                            <button type='button' className='w-full button-theme bg-slate-900 shadow-slate-900 text-slate-100 py-1.5'>Visit dApp</button>
+                                        </a>
+                                    </> :
+                                    <>
+                                        <a target="_blank">
+                                            {sessionId ? (
+                                                <button type='button' onClick={() => { setShowQR(true) }} className='w-full button-theme bg-slate-900 shadow-slate-900 text-slate-100 py-1.5'>Verfiy Age</button>
+                                            ) : (
+                                                "Loading"
+                                            )}
+
+                                        </a>
+                                    </>
+                            }
                         </div>
                         <div className="w-1/2">
                             <a href="/" target="_blank">
@@ -137,44 +288,103 @@ function AppSection({ }) {
                     </div>
                 </div>
                 <div className='absolute mt-32 sm:mt-4 justify-center max-w-xl relative lg:max-w-none w-full'>
-                    <div>
-                        <img onError={({ currentTarget }) => {
-                            currentTarget.onerror = null; // prevents looping
-                            currentTarget.src = "https://user-images.githubusercontent.com/20684618/31289519-9ebdbe1a-aae6-11e7-8f82-bf794fdd9d1a.png";
-                        }}
-                            src={banner}
-                            className={`rounded-xl sm:w-full sm:h-full object-fill transitions-theme
+
+                    {qr ? <>
+                        <div>
+                            {isHandlingVerification && (
+                                <div>
+                                    <img className='mt-4 w-80 ml-32' src="https://blogs.sap.com/wp-content/uploads/2021/10/500-fingerprint-security-outline.gif" />
+                                    <p className="ml-56">Authenticating</p>
+
+                                </div>
+                            )}
+                            {<div>
+                                    <img className='mt-4 w-80 ml-32' src={verificationMessage} />
+                                    {verificationMessage && <p className="ml-56">Age Verified ✅</p>}
+
+                                </div>}
+                            {qrCodeData &&
+                                !isHandlingVerification &&
+                                !verificationCheckComplete && (
+                                    <div className="mt-16 ml-40 justify-center">
+
+                                        <QRCode value={JSON.stringify(qrCodeData)} />
+                                    </div>
+                                )}
+
+
+                            {qrCodeData.body.message && <><p>{qrCodeData.body.message}</p></>}
+
+                            {qrCodeData.body.reason && (
+                                <p className="mt-4 ml-32 mb-4 ">Reason: {qrCodeData.body.reason}</p>
+                            )}
+                            <button
+
+                                className='w-full button-theme bg-slate-900 shadow-slate-900 text-slate-100 py-1.5'
+
+                                onClick={() => openInNewTab(linkDownloadPolygonIDWalletApp)}
+                            >
+                                Download the Polygon ID Wallet App{" "}
+
+                            </button>
+                            <button
+
+                                className='w-full mt-2 button-theme bg-slate-500 shadow-slate-900 text-slate-100 py-1.5'
+
+                                onClick={() => openInNewTab(issuerOrHowToLink)}
+                            >
+                                Get a {credentialType}
+
+                            </button>
+                            {/* <button type='button' onClick={() => { verifyAge()}} className='w-full button-theme bg-slate-900 shadow-slate-900 text-slate-100 py-1.5'>Verfiy Proof</button> */}
+                        </div>
+
+                    </> :
+
+                        <>
+                            <div>
+                                <img onError={({ currentTarget }) => {
+                                    currentTarget.onerror = null; // prevents looping
+                                    currentTarget.src = "https://user-images.githubusercontent.com/20684618/31289519-9ebdbe1a-aae6-11e7-8f82-bf794fdd9d1a.png";
+                                }}
+                                    src={banner}
+                                    className={`rounded-xl sm:w-full sm:h-full object-fill transitions-theme
                         'h-80 lg:h-56 md-h-52 sm:h-28 xsm:h-36'`}
-                        />
-                    </div>
+                                />
+                            </div>
 
-                    <div className="flex sm:flex-wrap">
-                        {
-                            scOne != "https://dgshe1iny46ip.cloudfront.net/screenshots.png" && <>
-                                {scOne != "undefined" &&
-                                    <img onError={({ currentTarget }) => {
-                                        currentTarget.onerror = null; // prevents looping
-                                        currentTarget.src = "https://user-images.githubusercontent.com/20684618/31289519-9ebdbe1a-aae6-11e7-8f82-bf794fdd9d1a.png";
-                                    }}
-                                        className="sm:relative rounded-xl px-1 mt-2 w-1/3 sm:w-1/3 h-100" src={scOne} />
+                            <div className="flex sm:flex-wrap">
+                                {
+                                    scOne != "https://dgshe1iny46ip.cloudfront.net/screenshots.png" && <>
+                                        {scOne != "undefined" &&
+                                            <img onError={({ currentTarget }) => {
+                                                currentTarget.onerror = null; // prevents looping
+                                                currentTarget.src = "https://user-images.githubusercontent.com/20684618/31289519-9ebdbe1a-aae6-11e7-8f82-bf794fdd9d1a.png";
+                                            }}
+                                                className="sm:relative rounded-xl px-1 mt-2 w-1/3 sm:w-1/3 h-100" src={scOne} />
+                                        }
+                                        {scTwo != "undefined" && <img
+                                            onError={({ currentTarget }) => {
+                                                currentTarget.onerror = null; // prevents looping
+                                                currentTarget.src = "https://user-images.githubusercontent.com/20684618/31289519-9ebdbe1a-aae6-11e7-8f82-bf794fdd9d1a.png";
+                                            }}
+                                            className="sm:relative rounded-xl px-1 mt-2 w-48 sm:w-1/3 h-100" src={scTwo} />}
+                                        {scThree != "undefined" &&
+                                            <img
+                                                onError={({ currentTarget }) => {
+                                                    currentTarget.onerror = null; // prevents looping
+                                                    currentTarget.src = "https://user-images.githubusercontent.com/20684618/31289519-9ebdbe1a-aae6-11e7-8f82-bf794fdd9d1a.png";
+                                                }}
+                                                className="sm:relative rounded-xl px-1 mt-2 w-48 sm:w-1/3 h-100" src={scThree} />}
+                                    </>
                                 }
-                                {scTwo != "undefined" && <img
-                                    onError={({ currentTarget }) => {
-                                        currentTarget.onerror = null; // prevents looping
-                                        currentTarget.src = "https://user-images.githubusercontent.com/20684618/31289519-9ebdbe1a-aae6-11e7-8f82-bf794fdd9d1a.png";
-                                    }}
-                                    className="sm:relative rounded-xl px-1 mt-2 w-48 sm:w-1/3 h-100" src={scTwo} />}
-                                {scThree != "undefined" &&
-                                    <img
-                                        onError={({ currentTarget }) => {
-                                            currentTarget.onerror = null; // prevents looping
-                                            currentTarget.src = "https://user-images.githubusercontent.com/20684618/31289519-9ebdbe1a-aae6-11e7-8f82-bf794fdd9d1a.png";
-                                        }}
-                                        className="sm:relative rounded-xl px-1 mt-2 w-48 sm:w-1/3 h-100" src={scThree} />}
-                            </>
-                        }
 
-                    </div>
+                            </div>
+                        </>
+
+
+                    }
+
 
                 </div>
 

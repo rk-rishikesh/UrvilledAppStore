@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { Tooltip } from "@material-tailwind/react";
 import "@Biconomy/web3-auth/dist/src/style.css"
 import SocialLogin from "@biconomy/web3-auth"
 import { ChainId } from "@biconomy/core-types";
@@ -19,6 +20,8 @@ export default function Profile() {
     const [provider, setProvider] = useState<any>(null);
     const [tokenID, setTokenID] = useState<any>(null);
     const [urvilleAccount, setUrvilleAccount] = useState<any>(null);
+    const [newUser, setNewUser] = useState<boolean>(false);
+    const [box, setOpenBox] = useState<boolean>(true);
 
     const bundler: IBundler = new Bundler({
         bundlerUrl: 'https://bundler.biconomy.io/api/v2/80001/nJPK7B3ru.dd7f7861-190d-41bd-af80-6877f74b8f44',
@@ -110,12 +113,14 @@ export default function Profile() {
 
         if (currentBalance == 0) {
             console.log("New User Found! ")
-            await mintToken();
-            await getUrvilleWalletAddress()
+            setNewUser(true)
+            const id = await mintToken();
+            console.log(id)
+            await getUrvilleWalletAddress(id)
         } else {
             console.log("Old User Found !")
-            await getUserTokenID(address);
-            await getUrvilleWalletAddress()
+            const id = await getUserTokenID(address);
+            await getUrvilleWalletAddress(id)
         }
     }
 
@@ -152,6 +157,7 @@ export default function Profile() {
                 const contract = new ethers.Contract(TOKENADDRESS, TOKENABI, provider);
                 const totalSupply = await contract.totalSupply();
                 setTokenID(totalSupply);
+                return totalSupply;
 
             } catch (e) {
                 console.error("Error executing transaction:", e);
@@ -175,6 +181,8 @@ export default function Profile() {
         var totalSupply = await contract.totalSupply();
         totalSupply = Number(totalSupply._hex);
         console.log(totalSupply)
+        var id = 0;
+
         for (var i = 0; i < totalSupply; i++) {
             console.log(i)
             const owner = await contract.ownerOf(i);
@@ -182,8 +190,10 @@ export default function Profile() {
             console.log(address)
             if (owner.toString().toUpperCase() === address.toString().toUpperCase()) {
                 setTokenID(i);
+                id = i;
             }
         }
+        return id
     }
 
     const createUrvilleAccount = async () => {
@@ -232,7 +242,7 @@ export default function Profile() {
         }
     };
 
-    const getUrvilleWalletAddress = async () => {
+    const getUrvilleWalletAddress = async (tokenId: any) => {
         if (!sdkRef?.current?.provider) return
         sdkRef.current.hideWallet()
 
@@ -244,9 +254,28 @@ export default function Profile() {
         const implementation = "0x8088d32492bde496Adb942D8aFD2016EFFd24F9D"
         const chainId = 80001
         const salt = 0
-        var urvilleAcc = await contract.account(implementation, chainId, TOKENADDRESS, 2, salt)
+        console.log(tokenId)
+        var urvilleAcc = await contract.account(implementation, chainId, TOKENADDRESS, tokenId, salt)
         console.log("URVILLE ACCOUNT", urvilleAcc)
         setUrvilleAccount(urvilleAcc)
+    }
+
+    const logout = async () => {
+        if (!sdkRef.current) {
+            console.error('Web3Modal not initialized.')
+            return
+        }
+        await sdkRef.current.logout()
+        sdkRef.current.hideWallet()
+        setSmartAccount(null)
+        enableInterval(false)
+    }
+
+    const openLootBox = async () => {
+        setLoading(true)
+        await new Promise((r) => setTimeout(r, 5000));
+        setLoading(false)
+        setOpenBox(false)
     }
 
     return (
@@ -280,16 +309,29 @@ export default function Profile() {
                                                 className="shadow-xl rounded-full h-auto align-middle border-none absolute -m-16 -ml-20 lg:-ml-16"
                                                 style={{ maxWidth: "150px" }}
                                             />
+
                                         </div>
+
                                     </div>
 
+                                    {!smartAccount && <> <div className='sm:mt-4 flex items-center justify-center max-w-xl relative lg:max-w-none w-full'>
+                                        <img src="https://cdn3d.iconscout.com/3d/premium/thumb/metaverse-world-6618595-5552783.png"
+                                            className='mt-32 w-auto object-fill transitions-theme
+                                                            h-80 lg:h-56 md-h-52 sm:h-48 xsm:h-36 -rotate-[10deg] hover:rotate-12'
 
+                                        />
+                                    </div></>}
                                     {loading ? <> <img className='mt-32 w-16 mb-32' src="https://i.gifer.com/ZZ5H.gif" /></> : <>
+
+                                        {smartAccount && <a className="flex items-center" target={"_blank"} role="button">
+                                            <button type='button' className='mt-32 button-theme bg-slate-900 shadow-slate-900
+                                                text-slate-100 py-1.5' onClick={() => logout()}>Logout Account</button>
+                                        </a>}
 
                                         <div className="mt-32">
                                         </div>
 
-                                        {true ? <></> : <div className='flex items-center justify-between lg:flex-col
+                                        {!newUser ? <></> : <div className='flex items-center justify-between lg:flex-col
                                                     lg:justify-center the-container flex-row-reverse'>
                                             <div className='max-w-lg lg:max-w-none w-full md:text-center grid items-center
                                                         lg:justify-items-center'>
@@ -331,7 +373,7 @@ export default function Profile() {
                                                         <div className='flex'>
                                                             <div className="mr-16 p-3 text-center mt-8">
                                                                 <span className="text-xl block tracking-wide text-gray-700">
-                                                                    100 URV
+                                                                {box ? "100 URV" : "30 URV"}
                                                                 </span>
                                                                 <span className="text-sm text-gray-500">URV Balance</span>
                                                             </div>
@@ -373,11 +415,37 @@ export default function Profile() {
                                                             </div>
                                                             <div className="ml-4 p-3 text-center mt-8">
                                                                 <span className="text-xl block  tracking-wide text-gray-700">
-                                                                    5$
+                                                                    {box ? "0 $" : "51.05$"}
                                                                 </span>
                                                                 <span className="text-sm text-gray-500">ACCOUNT VALUE</span>
                                                             </div>
                                                         </div>
+
+                                                        {!box ? <div className='flex mb-8'>
+                                                            <div className="p-3 item-center text-center mt-8">
+                                                                <Tooltip content="Urville Level 1">
+                                                                    <span className="text-xl block tracking-wide text-gray-700">
+                                                                        <img className="w-16" src="https://cdn-icons-png.flaticon.com/512/1021/1021210.png" />
+                                                                    </span>
+                                                                </Tooltip>
+
+                                                            </div>
+                                                            <div className="ml-4 p-3 text-center mt-8">
+                                                                <Tooltip content="Premium Notification Subscription">
+                                                                    <span className="text-xl block tracking-wide text-gray-700">
+                                                                        <img className="w-16" src="https://img.freepik.com/premium-photo/premium-game-button-notification-icon-3d-rendering-isolated-background_150525-2942.jpg" />
+                                                                    </span>
+                                                                </Tooltip>
+                                                            </div>
+                                                            <div className="ml-4 p-3 text-center mt-8">
+                                                                <Tooltip content="Lens Handle">
+                                                                    <span className="text-xl block tracking-wide text-gray-700">
+                                                                        <img className="mt-2 w-12" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ60fbKiidqdTlUPCGR4M9cDIhb_UW2E4xUFFh2uzB2YFq5nYkok3KSN4a5178RQuw4DJY&usqp=CAU" />
+                                                                    </span>
+                                                                </Tooltip>
+                                                            </div>
+
+                                                        </div> : <></>}
 
                                                     </div>
                                                     <div className='sm:mt-4 flex items-center justify-center max-w-xl relative lg:max-w-none w-full'>
@@ -391,57 +459,65 @@ export default function Profile() {
                                             </>
                                         }
 
-                                        {true && <div className="bg-white">
-                                            <div className="mx-auto max-w-7xl py-24 sm:px-6 sm:py-32 lg:px-8">
-                                                <div className="rounded-xl relative isolate overflow-hidden bg-gray-900 px-6 pt-16 shadow-2xl sm:rounded-3xl sm:px-16 md:pt-24 lg:flex lg:gap-x-20 lg:px-24 lg:pt-0">
-                                                    <svg
-                                                        viewBox="0 0 1024 1024"
-                                                        className="absolute left-1/2 top-1/2 -z-10 h-[64rem] w-[64rem] -translate-y-1/2 [mask-image:radial-gradient(closest-side,white,transparent)] sm:left-full sm:-ml-80 lg:left-1/2 lg:ml-0 lg:-translate-x-1/2 lg:translate-y-0"
-                                                        aria-hidden="true"
-                                                    >
-                                                        <circle cx={512} cy={512} r={512} fill="url(#759c1415-0410-454c-8f7c-9a820de03641)" fillOpacity="0.7" />
-                                                        <defs>
-                                                            <radialGradient id="759c1415-0410-454c-8f7c-9a820de03641">
-                                                                <stop stopColor="#7775D6" />
-                                                                <stop offset={1} stopColor="#E935C1" />
-                                                            </radialGradient>
-                                                        </defs>
-                                                    </svg>
+                                        {box && <>
+                                            {!newUser && smartAccount && <div className="bg-white">
+                                                <div className="mx-auto max-w-7xl py-24 sm:px-6 sm:py-32 lg:px-8">
+                                                    <div className="rounded-xl relative isolate overflow-hidden bg-gray-900 px-6 pt-16 shadow-2xl sm:rounded-3xl sm:px-16 md:pt-24 lg:flex lg:gap-x-20 lg:px-24 lg:pt-0">
+                                                        <svg
+                                                            viewBox="0 0 1024 1024"
+                                                            className="absolute left-1/2 top-1/2 -z-10 h-[64rem] w-[64rem] -translate-y-1/2 [mask-image:radial-gradient(closest-side,white,transparent)] sm:left-full sm:-ml-80 lg:left-1/2 lg:ml-0 lg:-translate-x-1/2 lg:translate-y-0"
+                                                            aria-hidden="true"
+                                                        >
+                                                            <circle cx={512} cy={512} r={512} fill="url(#759c1415-0410-454c-8f7c-9a820de03641)" fillOpacity="0.7" />
+                                                            <defs>
+                                                                <radialGradient id="759c1415-0410-454c-8f7c-9a820de03641">
+                                                                    <stop stopColor="#7775D6" />
+                                                                    <stop offset={1} stopColor="#E935C1" />
+                                                                </radialGradient>
+                                                            </defs>
+                                                        </svg>
 
-                                                    <div className="w-full lg:w-4/12 px-4 lg:order-1">
-                                                        <div className="flex justify-center py-4 lg:pt-4 pt-8">
-                                                            <div className="mr-4 p-3 text-center -mt-24">
-                                                                <img src="https://miro.medium.com/v2/resize:fit:946/1*C8vjYe9EvpJb8dI2FFLMNQ.gif" />
-                                                            </div>
-                                                            <div className="mr-4 p-3 text-center">
-                                                                <div className="mx-auto max-w-md text-center lg:mx-0 lg:flex-auto lg:py-32 lg:text-left">
-                                                                    <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                                                                        Unlock a World of Surprises with Lootbox Adventures
-                                                                        <br />
+                                                        <div className="w-full lg:w-4/12 px-4 lg:order-1">
+                                                            <div className="flex justify-center py-4 lg:pt-4 pt-8">
+                                                                <div className="mr-4 p-3 text-center -mt-24">
+                                                                    <img src="https://miro.medium.com/v2/resize:fit:946/1*C8vjYe9EvpJb8dI2FFLMNQ.gif" />
+                                                                </div>
 
-                                                                    </h2>
-                                                                    <p className="mt-6 text-lg leading-8 text-gray-300">
-                                                                        Dive into the thrilling world of Lootbox Adventures and unlock a treasure chest of rewards while earning valuable URV tokens and in app NFTs.
-                                                                    </p>
-                                                                    <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
-                                                                        <a
-                                                                            href="#"
-                                                                            className="rounded-md bg-white px-3.5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-                                                                        >
-                                                                            Open Lootbox For 80 URV
-                                                                        </a>
 
+                                                                <div className="mr-4 p-3 text-center">
+                                                                    <div className="mx-auto max-w-md text-center lg:mx-0 lg:flex-auto lg:py-32 lg:text-left">
+                                                                        <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+                                                                            Unlock a World of Surprises with Lootbox Adventures
+                                                                            <br />
+
+                                                                        </h2>
+                                                                        <p className="mt-6 text-lg leading-8 text-gray-300">
+                                                                            Dive into the thrilling world of Lootbox Adventures and unlock a treasure chest of rewards while earning valuable URV tokens and in app NFTs.
+                                                                        </p>
+                                                                        <p className="mt-6 text-lg leading-8 text-gray-300">
+                                                                            You can unlock 1 lootbox every week
+                                                                        </p>
+                                                                        <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
+                                                                            <button
+                                                                                onClick={() => openLootBox()}
+                                                                                className="rounded-md bg-white px-3.5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                                                                            >
+                                                                                Open Lootbox For 70 URV
+                                                                            </button>
+
+                                                                        </div>
                                                                     </div>
                                                                 </div>
+
                                                             </div>
-
                                                         </div>
+
+
                                                     </div>
-
-
                                                 </div>
-                                            </div>
-                                        </div>}
+                                            </div>}
+                                        </>}
+
                                     </>}
 
 
